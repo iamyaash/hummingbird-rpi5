@@ -12,6 +12,11 @@ RUN rm -f /etc/dnf/protected.d/grub2-efi-aa64.conf \
 COPY files/etc/pki/rpm-gpg/RPM-GPG-KEY-AlmaLinux-10 /etc/pki/rpm-gpg/
 COPY files/etc/yum.repos.d/almalinux-rpi.repo /etc/yum.repos.d/
 
+# Fedora 44 repo and its key:
+# Hummingbird doesn't ship linux-firmware or brcmfmac-firmware, and the Pi 5 WiFi needs them
+COPY files/etc/pki/rpm-gpg/RPM-GPG-KEY-fedora-44-primary /etc/pki/rpm-gpg/
+COPY files/etc/yum.repos.d/fedora-44-firmware.repo /etc/yum.repos.d/
+
 # Remove UEFI boot chain & bootupd from dnf directly during build time
 # Remove bootupd and kernel leftover files
 # Install Raspberry Pi kernel after removing /usr/lib/modules/*
@@ -23,6 +28,7 @@ RUN systemctl disable bootloader-update.service \
        kernel kernel-core kernel-modules kernel-modules-core \
     && rm -rf /usr/lib/bootupd /usr/lib/modules/* /usr/lib/efi \
     && dnf -y install --setopt=install_weak_deps=False raspberrypi2-kernel4 raspberrypi2-firmware \
+    linux-firmware-raspberrypi brcmfmac-firmware wireless-regdb \
     && KVER=$(ls /usr/lib/modules) \
     && mv /boot/kernel-$KVER.img /usr/lib/modules/$KVER/vmlinuz \
     && mv /boot/initramfs-$KVER.img /usr/lib/modules/$KVER/initramfs.img \
