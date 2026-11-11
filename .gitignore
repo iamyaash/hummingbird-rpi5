@@ -7,3 +7,7 @@
 .vscode/
 *.swp
 
+
+# Image and firmware artifacts
+*.img.xz
+boot-staging/
