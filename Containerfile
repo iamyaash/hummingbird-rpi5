@@ -73,6 +73,12 @@ RUN systemctl preset NetworkManager.service sshd.service bluetooth.service chron
     cloud-init-main.service cloud-init-local.service cloud-init-network.service \
     cloud-config.service cloud-final.service
 
+# The Pi has no battery clock, and Hummingbird's chrony pool doesn't resolve,
+# so HTTPS fails on certificate dates. Use Fedora's pool. Fail if that line moves.
+RUN grep -q '2\.hummingbird\.pool\.ntp\.org' /etc/chrony.conf \
+    && sed -i 's/2\.hummingbird\.pool\.ntp\.org/2.fedora.pool.ntp.org/' /etc/chrony.conf \
+    && grep -q '2\.fedora\.pool\.ntp\.org' /etc/chrony.conf
+
 # Create the /var folders for NetworkManager, bluez and cloud-init. bootc doesn't update /var.
 COPY files/usr/lib/tmpfiles.d/fedora-hummingbird-rpi5.conf /usr/lib/tmpfiles.d/
 
