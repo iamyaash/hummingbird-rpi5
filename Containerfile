@@ -88,8 +88,11 @@ COPY files/usr/lib/NetworkManager/conf.d/50-rpi-wifi-powersave.conf /usr/lib/Net
 # Replace Hummingbird's kernel args. The Pi 5 debug UART is ttyAMA10, not ttyS0.
 COPY files/usr/lib/bootc/kargs.d/00-base.toml /usr/lib/bootc/kargs.d/
 
-# Let the video group use vcgencmd without sudo
+# vcgencmd and vcmailbox come from raspberrypi-userland. vcgencmd reads firmware info
+# (temperature, throttling), and vcmailbox runs `rpi-bootc-bootloader tryboot`.
+# The udev rule lets the video group use them without sudo.
 COPY files/usr/lib/udev/rules.d/60-rpi-vcio.rules /usr/lib/udev/rules.d/
+RUN test -x /usr/bin/vcgencmd && test -x /usr/bin/vcmailbox
 
 # Rebuild the initramfs: no-hostonly since the build host is not a Pi,
 # with the xfs/erofs/overlay modules from 30-rpi.conf for root and composefs
