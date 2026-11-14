@@ -19,4 +19,4 @@ the upstream Fedora device trees, and no overlays ship with it.
 
 Don't run "bootc rollback". It can leave the Pi unable to boot. To roll back, run
 "rpi-bootc-bootloader sync", then "rpi-bootc-bootloader tryreboot", then
-"rpi-bootc-bootloader sync" again. The project README has the details.
+"rpi-bootc-bootloader sync" again. The repo's docs/upgrades.md has the details.
