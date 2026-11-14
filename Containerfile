@@ -13,21 +13,28 @@ FROM ${BASE_IMAGE} AS base
 # - vcio.ko gives us /dev/vcio for vcgencmd, vcmailbox and tryboot. Fedora's kernel doesn't have
 #   CONFIG_BCM_VCIO. kernel-devel comes from Koji by exact version, since the Fedora
 #   updates repo only has the newest kernel.
+# - 8250_bcm7271.ko is the Pi 5 Bluetooth UART driver. Fedora's kernel doesn't have
+#   CONFIG_SERIAL_8250_BCM7271. Upstream source, fetched at the kernel's exact version.
 # - Image is the raw arm64 kernel. Fedora's vmlinuz is an EFI zboot wrapper around a
 #   zstd payload, and the Pi firmware can't boot that.
 FROM ${BUILDER_IMAGE} AS kernel-build
 COPY kmod/vcio/ /src/vcio/
+COPY kmod/bcm7271-uart/ /src/bcm7271-uart/
 RUN --mount=type=bind,from=base,source=/usr/lib/modules,target=/base-modules \
     set -eux; \
     KVER="$(ls /base-modules)"; \
     test "$(echo "$KVER" | wc -w)" = 1; \
     ARCH="${KVER##*.}"; test "$ARCH" = "$(uname -m)"; \
     VER="${KVER%%-*}"; REL="${KVER#*-}"; REL="${REL%.*}"; \
-    dnf -y install --setopt=install_weak_deps=False gcc make kmod zstd \
+    dnf -y install --setopt=install_weak_deps=False gcc make kmod zstd curl \
         "https://kojipkgs.fedoraproject.org/packages/kernel/$VER/$REL/$ARCH/kernel-devel-$KVER.rpm"; \
     make -C /src/vcio KDIR="/usr/src/kernels/$KVER"; \
     modinfo -F vermagic /src/vcio/vcio.ko | grep -q "^$KVER "; \
-    mkdir -p /out; cp /src/vcio/vcio.ko /out/; echo "$KVER" > /out/kver; \
+    make -C /src/bcm7271-uart KDIR="/usr/src/kernels/$KVER" KVERSION="$VER"; \
+    BT=/src/bcm7271-uart/8250/8250_bcm7271.ko; \
+    modinfo -F vermagic "$BT" | grep -q "^$KVER "; \
+    modinfo -F alias "$BT" | grep -qx 'of:N\*T\*Cbrcm,bcm7271-uart'; \
+    mkdir -p /out; cp /src/vcio/vcio.ko "$BT" /out/; echo "$KVER" > /out/kver; \
     Z="/base-modules/$KVER/vmlinuz"; \
     test "$(dd if="$Z" bs=1 skip=4 count=4 status=none)" = zimg; \
     test "$(dd if="$Z" bs=1 skip=24 count=4 status=none)" = zstd; \
@@ -78,6 +85,8 @@ RUN systemctl disable bootloader-update.service \
 # Get the Fedora kernel booting on the Pi firmware:
 # - vmlinuz becomes the raw Image. The .vmlinuz.hmac file hashed the zboot version, so it's removed.
 # - vcio.ko goes in extra/ and is loaded at boot from modules-load.d, since there is no device tree node for it.
+# - 8250_bcm7271.ko also goes in extra/. It loads through its device tree alias when the Bluetooth UART shows up,
+#   and then hci_uart and btbcm bring up hci0.
 # - The Pi 5 DTBs go under /usr/share/raspberrypi2-kernel*/<kver>/boot/, which is
 #   where rpi-bootc-bootloader copies from. The firmware looks for the downstream file names,
 #   so the upstream bcm2712-d-rpi-5-b.dtb gets installed as bcm2712d0-rpi-5-b.dtb.
@@ -88,8 +97,10 @@ RUN KVER=$(ls /usr/lib/modules) \
     && install -m 0755 /tmp/kernel-build/Image /usr/lib/modules/$KVER/vmlinuz \
     && rm -f /usr/lib/modules/$KVER/.vmlinuz.hmac \
     && install -D -m 0644 /tmp/kernel-build/vcio.ko /usr/lib/modules/$KVER/extra/vcio.ko \
+    && install -m 0644 /tmp/kernel-build/8250_bcm7271.ko /usr/lib/modules/$KVER/extra/ \
     && depmod -a $KVER \
     && modinfo -k $KVER vcio > /dev/null \
+    && grep -q 'brcm,bcm7271-uart.* 8250_bcm7271$' /usr/lib/modules/$KVER/modules.alias \
     && D=/usr/share/raspberrypi2-kernel-fedora/$KVER/boot \
     && install -D -m 0644 /usr/lib/modules/$KVER/dtb/broadcom/bcm2712-rpi-5-b.dtb $D/bcm2712-rpi-5-b.dtb \
     && install -m 0644 /usr/lib/modules/$KVER/dtb/broadcom/bcm2712-d-rpi-5-b.dtb $D/bcm2712d0-rpi-5-b.dtb \
