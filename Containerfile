@@ -129,7 +129,7 @@ RUN grep -q '2\.hummingbird\.pool\.ntp\.org' /etc/chrony.conf \
     && grep -q '2\.fedora\.pool\.ntp\.org' /etc/chrony.conf
 
 # Create the /var folders for NetworkManager, bluez and cloud-init. bootc doesn't update /var.
-COPY files/usr/lib/tmpfiles.d/fedora-hummingbird-rpi5.conf /usr/lib/tmpfiles.d/
+COPY files/usr/lib/tmpfiles.d/hummingbird-rpi5.conf /usr/lib/tmpfiles.d/
 
 # brcmfmac drops off WiFi when power save is on, so turn it off.
 COPY files/usr/lib/NetworkManager/conf.d/50-rpi-wifi-powersave.conf /usr/lib/NetworkManager/conf.d/
