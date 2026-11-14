@@ -43,7 +43,7 @@ Fedora's kernel boots fine on the Pi once a few things are changed.
 | Part | Comes from |
 |---|---|
 | Userspace (systemd, bootc, ostree, dracut, NetworkManager, chrony) | `quay.io/hummingbird-community/os-minimal`, pinned by date and digest |
-| Kernel | Fedora 44 kernel in the base image (`7.2.13-200.fc44` at the current pin) |
+| Kernel | Fedora 44 kernel in the base image (`7.3.3-200.fc44` at the current pin) |
 | Device trees | Upstream Fedora Pi 5 DTBs from the same kernel |
 | `/dev/vcio` | `vcio.ko`, built from [`kmod/vcio/`](../kmod/vcio/) |
 | VideoCore firmware | AlmaLinux `raspberrypi2-firmware` |

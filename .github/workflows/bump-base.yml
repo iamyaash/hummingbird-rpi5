@@ -1,0 +1,49 @@
+name: Bump base image
+
+# Once a week, check for a newer date tag of the base image and open a pull request
+# that updates the pin in the Containerfile. Build from the PR branch before merging.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"   # Mondays 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Find the newest date tag and its digest
+        id: base
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq skopeo jq
+          REPO=quay.io/hummingbird-community/os-minimal
+          TAG=$(skopeo list-tags docker://$REPO | jq -r '.Tags[] | select(test("^[0-9]{8}$"))' | sort | tail -1)
+          DIGEST=$(skopeo inspect --override-arch arm64 --override-os linux docker://$REPO:$TAG | jq -r .Digest)
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+
+      - name: Update the pin in the Containerfile
+        run: |
+          sed -i -E "s|^ARG BASE_IMAGE=quay.io/hummingbird-community/os-minimal:[0-9]{8}@sha256:[a-f0-9]{64}|ARG BASE_IMAGE=quay.io/hummingbird-community/os-minimal:${{ steps.base.outputs.tag }}@${{ steps.base.outputs.digest }}|" Containerfile
+
+      - uses: peter-evans/create-pull-request@v7
+        with:
+          branch: bump/base-image
+          title: "build: bump base image to ${{ steps.base.outputs.tag }}"
+          commit-message: "build: bump base image to ${{ steps.base.outputs.tag }}"
+          body: |
+            Bumps the pinned base image to ${{ steps.base.outputs.tag }}.
+
+            Build from this branch before merging:
+            `gh workflow run build.yml --ref bump/base-image`
+
+            If the kernel changed, the build fails with the command to run:
+            `make -C kmod/bcm7271-uart update KVERSION=<x.y.z>`
