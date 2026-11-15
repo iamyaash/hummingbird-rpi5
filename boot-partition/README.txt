@@ -17,6 +17,6 @@ Don't edit config.txt. rpi-bootc-bootloader rewrites it on every update. Put fir
 config-bootc-common.txt instead. Don't add device tree overlay (dtoverlay) lines: the kernel uses
 the upstream Fedora device trees, and no overlays ship with it.
 
-Don't run "bootc rollback". It can leave the Pi unable to boot. To roll back, run
-"rpi-bootc-bootloader sync", then "rpi-bootc-bootloader tryreboot", then
-"rpi-bootc-bootloader sync" again. The repo's docs/upgrades.md has the details.
+To roll back, run "sudo bootc rollback", wait for rpi-bootc-bootloader-sync.service to finish,
+then reboot. Builds older than rpi-bootc-bootloader v0.0.8-hb1 can't do this safely, so run
+"bootc upgrade" on those first. The repo's docs/upgrades.md has the details.
