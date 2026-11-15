@@ -8,7 +8,8 @@
 kfox1111. It does the job GRUB and bootupd do on a normal bootc system: it makes the new
 deployment bootable after `bootc upgrade` or `bootc switch`.
 
-We use **v0.0.8**, pinned in the [`Containerfile`](../../Containerfile) (`RPI_BOOTC_BOOTLOADER_VERSION`).
+We use **v0.0.8**, kept in the repo at [`bootloader/`](../../bootloader/) with a few changes for
+`bootc rollback`. The patched version reports itself as `v0.0.8-hb1`.
 
 ## Why we need it
 
@@ -28,8 +29,8 @@ FAT partition (`CIDATA`), so something has to copy each deployment's boot files 
 | `/usr/bin/rpi-bootc-bootloader` | The script |
 | `ostree-finalize-staged.service.d/rpi-bootc-bootloader.conf` | A drop-in that runs a sync when bootc finalizes a staged update at shutdown |
 
-Both are downloaded from the release tag at build time. The build checks the script's `VERSION`
-matches the pin.
+Both are copied from the repo at build time. The build checks the script's `VERSION` is
+`v0.0.8-hb1`.
 
 ## What a sync does
 

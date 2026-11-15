@@ -5,8 +5,6 @@ ARG BASE_IMAGE=quay.io/hummingbird-community/os-minimal:20261113@sha256:a98c8cf5
 # Only used to build vcio.ko and unpack the kernel. Nothing from it ships.
 ARG BUILDER_IMAGE=registry.fedoraproject.org/fedora:44
 
-ARG RPI_BOOTC_BOOTLOADER_VERSION=v0.0.8
-
 FROM ${BASE_IMAGE} AS base
 
 # Build against the base image's Fedora kernel:
@@ -47,7 +45,6 @@ RUN --mount=type=bind,from=base,source=/usr/lib/modules,target=/base-modules \
     test "$(dd if=/out/Image bs=1 skip=56 count=4 status=none)" = ARMd
 
 FROM ${BASE_IMAGE}
-ARG RPI_BOOTC_BOOTLOADER_VERSION
 
 # dnf protects GRUB and shim through /etc/dnf/protected.d. Drop that so dnf can remove them.
 RUN rm -f /etc/dnf/protected.d/grub2-efi-aa64.conf \
@@ -112,14 +109,14 @@ RUN KVER=$(ls /usr/lib/modules) \
     && rm -rf /tmp/kernel-build /var/cache/ldconfig
 
 # rpi-bootc-bootloader copies each bootc deployment onto the FAT partition
-# (bootc/entries/ostree-N/) and switches os_prefix in config.txt
-RUN base="https://raw.githubusercontent.com/kfox1111/rpi-bootc-bootloader/refs/tags/${RPI_BOOTC_BOOTLOADER_VERSION}" \
-    && mkdir -p /usr/lib/systemd/system/ostree-finalize-staged.service.d \
-    && curl -fsSL -o /usr/bin/rpi-bootc-bootloader "$base/rpi-bootc-bootloader" \
-    && curl -fsSL -o /usr/lib/systemd/system/ostree-finalize-staged.service.d/rpi-bootc-bootloader.conf \
-       "$base/system/ostree-finalize-staged.service.d/rpi-bootc-bootloader.conf" \
-    && chmod 0755 /usr/bin/rpi-bootc-bootloader \
-    && grep -q "VERSION=\"${RPI_BOOTC_BOOTLOADER_VERSION}\"" /usr/bin/rpi-bootc-bootloader
+# (bootc/entries/ostree-N/) and switches os_prefix in config.txt.
+# It's v0.0.8 kept in bootloader/ and patched for bootc rollback (see the top of the script).
+# It needs flock, cmp and diff, so fail if they're missing.
+COPY bootloader/rpi-bootc-bootloader /usr/bin/rpi-bootc-bootloader
+COPY files/usr/lib/systemd/system/ /usr/lib/systemd/system/
+RUN chmod 0755 /usr/bin/rpi-bootc-bootloader \
+    && grep -q 'VERSION="v0.0.8-hb1"' /usr/bin/rpi-bootc-bootloader \
+    && test -x /usr/bin/flock && test -x /usr/bin/cmp && test -x /usr/bin/diff
 
 # cloud-init: grow the partition behind /sysroot and resize /var, because / is
 # read-only composefs on ostree. Same patch as AlmaLinux's bootstrap image.
