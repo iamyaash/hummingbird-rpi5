@@ -30,9 +30,9 @@ Tested on a Raspberry Pi 5 (8 GB) on 2026-11-14, from a fresh flash of the CI im
   [WiFi](docs/base-vs-rpi5/wifi.md), [Bluetooth](docs/base-vs-rpi5/bluetooth.md) (pairing tested),
   [cloud-init](docs/base-vs-rpi5/cloud-init.md) first boot, [`vcgencmd`](docs/base-vs-rpi5/vcgencmd.md),
   [`vcmailbox`](docs/base-vs-rpi5/vcmailbox.md), [tryboot](docs/base-vs-rpi5/tryboot.md), watchdog,
-  `bootc upgrade`, `bootc switch`.
+  `bootc upgrade`, `bootc switch`, `bootc rollback` (tested on 2026-11-15, needs a build with
+  rpi-bootc-bootloader `v0.0.8-hb1`).
 - **Not tested yet:** HDMI with a monitor, the power button, a power cut during `bootc upgrade`.
-- **Doesn't work:** `bootc rollback`. Use the tryboot steps below.
 
 ## Build
 
@@ -123,17 +123,16 @@ A pinned tag never moves, so `upgrade` won't find anything newer until you switc
 
 ## Roll back
 
-Don't use `bootc rollback`. It can leave the Pi stuck at boot when the two deployments have
-different kernels. Use the tryboot method instead:
-
 ```sh
-sudo rpi-bootc-bootloader sync        # default = the booted one, fallback = the other
-sudo rpi-bootc-bootloader tryreboot   # boot the other deployment once
-# now on the old deployment:
-sudo rpi-bootc-bootloader sync        # make it the default
+sudo bootc rollback
+journalctl -b -u rpi-bootc-bootloader-sync.service | tail -1   # wait for "Finished"
+sudo reboot
 ```
 
-If the tryboot fails, a power cycle goes back to the default.
+A sync copies the boot entries to `CIDATA` by itself after the rollback. Wait for it before you
+reboot. This needs rpi-bootc-bootloader `v0.0.8-hb1` or newer (`rpi-bootc-bootloader version`).
+On older builds, `bootc rollback` can leave the Pi stuck at boot, so run `bootc upgrade` first or
+use the tryboot steps in [docs/upgrades.md](docs/upgrades.md).
 
 More detail: [docs/upgrades.md](docs/upgrades.md). How tryboot works:
 [tryboot](docs/base-vs-rpi5/tryboot.md).

@@ -61,13 +61,10 @@ If a tryboot fails, a power cycle goes back to the default.
 
 ## Things to know
 
-- `bootc rollback` doesn't work well with v0.0.8. It can leave the Pi stuck at boot when the two
-  deployments have different kernels. Use the tryboot steps in
-  [upgrades and rollback](../upgrades.md) instead.
-- Upstream v0.0.8 never deletes files from an entry folder, so old DTBs pile up after kernel
-  changes. See [known issues](../known-issues.md). The patched copy rebuilds each folder, which is
-  not yet tested on a Pi. The rollback fix isn't either, see
-  [testing the rollback fix](../upgrades.md#testing-the-rollback-fix-fixbootc-rollback-branch).
+- Upstream v0.0.8 doesn't sync after `bootc rollback`, so the Pi can get stuck at boot when the
+  two deployments have different kernels. It also never deletes files from an entry folder, so
+  old DTBs pile up after kernel changes. `v0.0.8-hb1` fixes both, tested on a Pi on 2026-11-15.
+  See [how the rollback fix works](../upgrades.md#how-the-rollback-fix-works).
 - Don't edit `config.txt` yourself. It's rewritten on every sync. Use `config-bootc-common.txt`.
 
 ---

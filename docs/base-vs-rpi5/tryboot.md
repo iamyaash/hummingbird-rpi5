@@ -18,16 +18,18 @@ That makes it a safe way to try something. If it doesn't boot, a power cycle get
 | `config.txt` | The default deployment |
 | `tryboot.txt` | The other deployment |
 
-So tryboot means "boot the other deployment, once". This is how we roll back, since
-`bootc rollback` isn't safe with rpi-bootc-bootloader v0.0.8.
+So tryboot means "boot the other deployment, once". `bootc rollback` is the normal way to roll
+back now. tryboot is for trying the other deployment first, and for builds with upstream
+rpi-bootc-bootloader `v0.0.8`, where `bootc rollback` isn't safe.
 
-## Rolling back
+## Rolling back with tryboot
 
 ```sh
 sudo rpi-bootc-bootloader sync        # default = booted one, tryboot = the other
 sudo rpi-bootc-bootloader tryreboot   # boot the other one once
 # now on the old deployment, keep it:
-sudo rpi-bootc-bootloader sync
+sudo rpi-bootc-bootloader sync        # on v0.0.8, or with TRYBOOT=1
+sudo bootc rollback                   # on v0.0.8-hb1 with TRYBOOT=0
 ```
 
 ```text

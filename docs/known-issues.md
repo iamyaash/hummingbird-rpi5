@@ -7,8 +7,10 @@
   warning.
 - **The power button is untested.** The boot log shows `gpio-keys ... Unable to get irq number for
   GPIO 0`.
-- **No `bootc rollback`.** See [upgrades and rollback](upgrades.md).
-- **Old files pile up on the FAT partition.** rpi-bootc-bootloader never deletes files from an
-  entry folder, so old DTBs and overlays stay around after a kernel change.
+- **`bootc rollback` on older builds.** Builds with upstream rpi-bootc-bootloader `v0.0.8` can
+  get stuck at boot after `bootc rollback`. Upgrade first. See
+  [upgrades and rollback](upgrades.md).
+- **A power cut during a boot partition sync is untested.** If it hits while the default entry
+  folder is being replaced, hold GPIO6 to boot the fallback.
 - **The kernel is tainted.** The unsigned `vcio.ko` and `8250_bcm7271.ko` taint it (flags `O`
   and `E`).
