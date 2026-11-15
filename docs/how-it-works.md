@@ -36,7 +36,12 @@ Fedora's kernel boots fine on the Pi once a few things are changed.
   adds `mmc_block sdhci sdhci-pltfm sdhci-brcmstb xfs erofs overlay`.
 - **Updates.** rpi-bootc-bootloader copies each bootc deployment onto the FAT partition
   (`bootc/entries/ostree-N/`) and points the firmware's `os_prefix` at it. That's why
-  `bootc upgrade` works without a separate bootloader.
+  `bootc upgrade` works without a separate bootloader. The script is v0.0.8, kept in
+  [`bootloader/`](../bootloader/) and patched (`v0.0.8-hb1`): the default entry follows ostree's
+  boot order, so `bootc rollback` is picked up, and each entry folder is rebuilt so old files
+  don't pile up. `rpi-bootc-bootloader-sync.path` runs a sync when ostree changes the boot
+  entries outside an upgrade. The changes are listed at the top of the script and tested by
+  [`tests/bootloader/run.sh`](../tests/bootloader/run.sh), but not yet on a Pi.
 
 ## Where each part comes from
 
@@ -50,6 +55,6 @@ Fedora's kernel boots fine on the Pi once a few things are changed.
 | Pi WiFi and Bluetooth firmware | AlmaLinux `linux-firmware-raspberrypi` |
 | `vcgencmd`, `vcmailbox` | AlmaLinux `raspberrypi-userland` |
 | WiFi, Bluetooth, cloud-init and other tools | Fedora 44 |
-| Boot entries on the FAT partition | [rpi-bootc-bootloader](https://github.com/kfox1111/rpi-bootc-bootloader) v0.0.8 |
+| Boot entries on the FAT partition | [rpi-bootc-bootloader](https://github.com/kfox1111/rpi-bootc-bootloader) v0.0.8, patched in [`bootloader/`](../bootloader/) |
 
 GRUB, shim and bootupd are removed.

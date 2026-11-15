@@ -28,6 +28,7 @@ FAT partition (`CIDATA`), so something has to copy each deployment's boot files 
 |---|---|
 | `/usr/bin/rpi-bootc-bootloader` | The script |
 | `ostree-finalize-staged.service.d/rpi-bootc-bootloader.conf` | A drop-in that runs a sync when bootc finalizes a staged update at shutdown |
+| `rpi-bootc-bootloader-sync.path` and `.service` | Ours, not upstream. Runs a sync when ostree changes `/boot/loader` outside an upgrade, for example on `bootc rollback` |
 
 Both are copied from the repo at build time. The build checks the script's `VERSION` is
 `v0.0.8-hb1`.
@@ -52,7 +53,7 @@ It finds p1 by taking the `/sysroot` device and swapping its partition number fo
 
 | Command | Does |
 |---|---|
-| `sudo rpi-bootc-bootloader sync` | Rewrite the entries. The booted deployment becomes the default. |
+| `sudo rpi-bootc-bootloader sync` | Rewrite the entries. The default is ostree's default entry (`(ostree:0)`), or the booted deployment with `TRYBOOT=1`. |
 | `sudo rpi-bootc-bootloader tryreboot` | Boot the other deployment once. Needs `vcmailbox`, so it needs [`vcio.ko`](vcio-ko.md). |
 | `rpi-bootc-bootloader version` | Print the version |
 
@@ -63,8 +64,10 @@ If a tryboot fails, a power cycle goes back to the default.
 - `bootc rollback` doesn't work well with v0.0.8. It can leave the Pi stuck at boot when the two
   deployments have different kernels. Use the tryboot steps in
   [upgrades and rollback](../upgrades.md) instead.
-- It never deletes files from an entry folder, so old DTBs pile up after kernel changes. See
-  [known issues](../known-issues.md).
+- Upstream v0.0.8 never deletes files from an entry folder, so old DTBs pile up after kernel
+  changes. See [known issues](../known-issues.md). The patched copy rebuilds each folder, which is
+  not yet tested on a Pi. The rollback fix isn't either, see
+  [testing the rollback fix](../upgrades.md#testing-the-rollback-fix-fixbootc-rollback-branch).
 - Don't edit `config.txt` yourself. It's rewritten on every sync. Use `config-bootc-common.txt`.
 
 ---
