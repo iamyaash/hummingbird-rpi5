@@ -1,0 +1,12 @@
+[Unit]
+Description=Copy the bootc boot entries to the Pi boot partition
+# Started by rpi-bootc-bootloader-sync.path when ostree rewrites the boot entries outside
+# an upgrade, for example on bootc rollback. Upgrades are synced at shutdown by the
+# ostree-finalize-staged.service drop-in. Default dependencies stay on, so this never
+# starts during shutdown.
+ConditionPathExists=/run/ostree-booted
+RequiresMountsFor=/boot /sysroot
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/rpi-bootc-bootloader sync

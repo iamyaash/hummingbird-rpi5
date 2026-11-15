@@ -1,0 +1,12 @@
+[Unit]
+Description=Watch /boot for new bootc boot entries
+ConditionPathExists=/run/ostree-booted
+
+[Path]
+# ostree swaps the /boot/loader symlink by renaming a new one over it. Watch /boot itself,
+# since that rename shows up there (IN_MOVED_TO), and a watch on the symlink may miss it.
+PathChanged=/boot
+Unit=rpi-bootc-bootloader-sync.service
+
+[Install]
+WantedBy=paths.target
