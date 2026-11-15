@@ -15,6 +15,9 @@ The image is put together from three places:
 - **AlmaLinux's Raspberry Pi packages** for the VideoCore firmware, the Pi's WiFi and Bluetooth
   firmware, and `vcgencmd` and `vcmailbox`.
 
+For what we changed from the base image and why, see
+[Base Hummingbird vs hummingbird-rpi5](docs/base-vs-rpi5/README.md).
+
 Based on [AlmaLinux/bootc-images-rpi](https://github.com/AlmaLinux/bootc-images-rpi) and
 [oci-native/archlinux-rpi](https://github.com/oci-native/archlinux-rpi). Only the Pi 5 is
 supported.
@@ -23,9 +26,11 @@ supported.
 
 Tested on a Raspberry Pi 5 (8 GB) on 2026-11-14, from a fresh flash of the CI image.
 
-- **Works:** boot from the Pi firmware, SSH, Ethernet, WiFi, Bluetooth (pairing tested),
-  cloud-init first boot, `vcgencmd`, `vcmailbox`, tryboot, watchdog, `bootc upgrade`,
-  `bootc switch`.
+- **Works:** boot from the [Pi firmware](docs/base-vs-rpi5/pi-firmware.md), SSH, Ethernet,
+  [WiFi](docs/base-vs-rpi5/wifi.md), [Bluetooth](docs/base-vs-rpi5/bluetooth.md) (pairing tested),
+  [cloud-init](docs/base-vs-rpi5/cloud-init.md) first boot, [`vcgencmd`](docs/base-vs-rpi5/vcgencmd.md),
+  [`vcmailbox`](docs/base-vs-rpi5/vcmailbox.md), [tryboot](docs/base-vs-rpi5/tryboot.md), watchdog,
+  `bootc upgrade`, `bootc switch`.
 - **Not tested yet:** HDMI with a monitor, the power button, a power cut during `bootc upgrade`.
 - **Doesn't work:** `bootc rollback`. Use the tryboot steps below.
 
@@ -130,7 +135,8 @@ sudo rpi-bootc-bootloader sync        # make it the default
 
 If the tryboot fails, a power cycle goes back to the default.
 
-More detail: [docs/upgrades.md](docs/upgrades.md).
+More detail: [docs/upgrades.md](docs/upgrades.md). How tryboot works:
+[tryboot](docs/base-vs-rpi5/tryboot.md).
 
 ## Known issues
 
@@ -138,7 +144,8 @@ More detail: [docs/upgrades.md](docs/upgrades.md).
   with more than one Pi nearby.
 - HDMI and the power button are untested.
 - Old DTBs and overlays stay on the FAT partition after a kernel change.
-- The unsigned `vcio.ko` and `8250_bcm7271.ko` taint the kernel.
+- The unsigned [`vcio.ko`](docs/base-vs-rpi5/vcio-ko.md) and
+  [`8250_bcm7271.ko`](docs/base-vs-rpi5/8250_bcm7271.md) taint the kernel.
 
 Full list: [docs/known-issues.md](docs/known-issues.md).
 
@@ -146,4 +153,4 @@ Full list: [docs/known-issues.md](docs/known-issues.md).
 
 - [Build](docs/build.md) | [Install](docs/install.md) | [Upgrades and rollback](docs/upgrades.md)
 - [Hardware test results](docs/hardware.md) | [How it works](docs/how-it-works.md)
-- [Known issues](docs/known-issues.md)
+- [Known issues](docs/known-issues.md) | [Base vs hummingbird-rpi5](docs/base-vs-rpi5/README.md)
