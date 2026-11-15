@@ -126,11 +126,12 @@ RUN f="$(echo /usr/lib/python3*/site-packages/cloudinit/config/cc_resizefs.py)" 
     && sed -i 's@resize_what = "/"@resize_what = "/var"@' "$f" \
     && rm -f "$(dirname "$f")"/__pycache__/cc_resizefs.*.pyc
 
-# Turn on networking, SSH, Bluetooth, time sync and cloud-init from a preset
+# Turn on networking, SSH, Bluetooth, time sync, cloud-init and the boot entry sync
+# from a preset
 COPY files/usr/lib/systemd/system-preset/70-rpi.preset /usr/lib/systemd/system-preset/
 RUN systemctl preset NetworkManager.service sshd.service bluetooth.service chronyd.service \
     cloud-init-main.service cloud-init-local.service cloud-init-network.service \
-    cloud-config.service cloud-final.service
+    cloud-config.service cloud-final.service rpi-bootc-bootloader-sync.path
 
 # The Pi has no battery clock, and Hummingbird's chrony pool doesn't resolve,
 # so HTTPS fails on certificate dates. Use Fedora's pool. Fail if that line moves.
