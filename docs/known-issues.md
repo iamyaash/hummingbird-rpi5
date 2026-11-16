@@ -10,7 +10,9 @@
 - **`bootc rollback` on older builds.** Builds with upstream rpi-bootc-bootloader `v0.0.8` can
   get stuck at boot after `bootc rollback`. Upgrade first. See
   [upgrades and rollback](upgrades.md).
-- **A power cut during a boot partition sync is untested.** If it hits while the default entry
-  folder is being replaced, hold GPIO6 to boot the fallback.
+- **A power cut during a boot partition sync can corrupt `CIDATA`** on builds with
+  rpi-bootc-bootloader `v0.0.8-hb1` or older. Neither entry boots, GPIO6 doesn't help, and the
+  card has to be re-flashed. `v0.0.8-hb2` flushes after each step to prevent this, but that
+  isn't tested on a Pi yet. See [power cuts during a sync](upgrades.md#power-cuts-during-a-sync).
 - **The kernel is tainted.** The unsigned `vcio.ko` and `8250_bcm7271.ko` taint it (flags `O`
   and `E`).

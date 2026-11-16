@@ -9,7 +9,7 @@ kfox1111. It does the job GRUB and bootupd do on a normal bootc system: it makes
 deployment bootable after `bootc upgrade` or `bootc switch`.
 
 We use **v0.0.8**, kept in the repo at [`bootloader/`](../../bootloader/) with a few changes for
-`bootc rollback`. The patched version reports itself as `v0.0.8-hb1`.
+`bootc rollback` and power cuts. The patched version reports itself as `v0.0.8-hb2`.
 
 ## Why we need it
 
@@ -31,7 +31,7 @@ FAT partition (`CIDATA`), so something has to copy each deployment's boot files 
 | `rpi-bootc-bootloader-sync.path` and `.service` | Ours, not upstream. Runs a sync when ostree changes `/boot/loader` outside an upgrade, for example on `bootc rollback` |
 
 Both are copied from the repo at build time. The build checks the script's `VERSION` is
-`v0.0.8-hb1`.
+`v0.0.8-hb2`.
 
 ## What a sync does
 
@@ -65,6 +65,12 @@ If a tryboot fails, a power cycle goes back to the default.
   two deployments have different kernels. It also never deletes files from an entry folder, so
   old DTBs pile up after kernel changes. `v0.0.8-hb1` fixes both, tested on a Pi on 2026-11-15.
   See [how the rollback fix works](../upgrades.md#how-the-rollback-fix-works).
+- Upstream v0.0.8 never flushes `CIDATA` before `umount`. Linux keeps the FAT changes in RAM
+  and writes them in any order, so a power cut during a sync can leave the FAT table pointing at
+  clusters that were never written. Both entry folders become unreadable and GPIO6 can't help.
+  This happened on a Pi on 2026-11-16 with `v0.0.8-hb1`. `v0.0.8-hb2` flushes after each step,
+  repairs a dirty FAT with `fsck.fat -a` before mounting it, and writes nothing when nothing
+  changed. See [power cuts during a sync](../upgrades.md#power-cuts-during-a-sync).
 - Don't edit `config.txt` yourself. It's rewritten on every sync. Use `config-bootc-common.txt`.
 
 ---
