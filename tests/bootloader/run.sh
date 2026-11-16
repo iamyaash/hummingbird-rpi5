@@ -111,6 +111,7 @@ run_sync() {
 	RPI_BOOTC_NO_MOUNT=1 \
 	RPI_BOOTC_TRYBOOT_CONF="$T/tryboot.conf" \
 	RPI_BOOTC_LOCK="$T/lock" \
+	RPI_BOOTC_FLUSH_LOG="$T/flushes" \
 	"$SCRIPT" sync "$@" > "$T/out" 2> "$T/err"
 }
 
@@ -170,6 +171,17 @@ sync_fails() { ! run_sync; }
 no_warning() { ! grep -q 'Warning' "$T/err"; }
 has_warning() { grep -q 'Warning: neither or both BLS entries are marked (ostree:0)' "$T/err"; }
 no_new_dirs() { ! ls -d "$FAT"/bootc/entries/*.new > /dev/null 2>&1; }
+no_tmp_files() { [ -z "$(find "$FAT" -name '*.tmp')" ]; }
+# flushed_before <A> <B>: the FAT was flushed for step A before step B (lines in $T/flushes).
+flushed_before() {
+	local a b
+	a="$(grep -n -x -m1 "$1" "$T/flushes" | cut -d: -f1)"
+	b="$(grep -n -x -m1 "$2" "$T/flushes" | cut -d: -f1)"
+	[ -n "$a" ] && [ -n "$b" ] && [ "$a" -lt "$b" ]
+}
+no_flushes() { [ ! -s "$T/flushes" ]; }
+# nothing_written_since <marker>: no file or folder on the FAT changed after <marker>.
+nothing_written_since() { [ -z "$(find "$FAT" -newer "$1")" ]; }
 
 # Deployments used by most cases: A and B have different kernels, like the AlmaLinux and
 # Fedora kernel images on the Pi. A ships more DTBs and overlays than B.
@@ -380,9 +392,94 @@ expect_entry 2 A 0
 check "old ostree-1 folder is kept" grep -qx "kernel A $(cat "$T/kver.A")" "$FAT/bootc/entries/ostree-1/vmlinuz"
 check "no ostree-N.new left" no_new_dirs
 
+# (k) hb2: the FAT is flushed after each new folder is written, after each swap, and
+# around each config file change, in an order where nothing points at unflushed data.
+new_fixture k-flush-order
+two_kernels
+set_state 1 2:B:0 1:A:1
+set_status B false
+rm -f "$T/flushes"
+sync_ok
+expect_default 2 1
+check "ostree-1.new flushed before the swap" flushed_before "write ostree-1.new" "swap ostree-1"
+check "ostree-2.new flushed before the swap" flushed_before "write ostree-2.new" "swap ostree-2"
+check "non-default folder swapped first" flushed_before "swap ostree-1" "write ostree-2.new"
+check "both folders flushed before tryboot.txt" flushed_before "swap ostree-2" "write tryboot.txt"
+check "both folders flushed before the default changes" flushed_before "swap ostree-2" "rename config-bootc-default.txt"
+check "config-bootc-default.txt flushed before and after the rename" \
+	flushed_before "write config-bootc-default.txt" "rename config-bootc-default.txt"
+check "trace written last" test "$(tail -n1 "$T/flushes")" = "rename rpi-bootc-log.txt"
+check "trace is on the FAT" grep -q 'sync_entry' "$FAT/rpi-bootc-log.txt"
+check "no *.tmp left" no_tmp_files
+check "no config-bootc-working.txt" test ! -e "$FAT/config-bootc-working.txt"
+# After a rollback only what changed is flushed again.
+set_state 0 2:A:0 1:B:1
+rm -f "$T/flushes"
+sync_ok
+expect_default 2 1
+expect_entry 2 A 0
+expect_entry 1 B 0
+check "rollback swaps ostree-1" grep -qx "swap ostree-1" "$T/flushes"
+check "rollback swaps ostree-2" grep -qx "swap ostree-2" "$T/flushes"
+check "config.txt not rewritten" test -z "$(grep 'config.txt' "$T/flushes")"
+
+# (l) hb2: a sync with nothing to change writes nothing to the FAT, not even the trace.
+new_fixture l-no-change
+two_kernels
+set_state 1 2:B:0 1:A:1
+set_status B false
+sync_ok
+LOG_BEFORE="$(md5sum < "$FAT/rpi-bootc-log.txt")"
+touch "$T/marker"
+sleep 0.05
+rm -f "$T/flushes"
+sync_ok
+check "no flushes" no_flushes
+check "nothing on the FAT changed" nothing_written_since "$T/marker"
+check "old trace kept" test "$LOG_BEFORE" = "$(md5sum < "$FAT/rpi-bootc-log.txt")"
+expect_default 2 1
+
+# (m) hb2: what an interrupted sync left behind is removed, and the folders are still
+# not rewritten when their contents are right.
+new_fixture m-leftovers
+two_kernels
+set_state 1 2:B:0 1:A:1
+set_status B false
+sync_ok
+INODE1="$(stat -c %i "$FAT/bootc/entries/ostree-1")"
+mkdir -p "$FAT/bootc/entries/ostree-2.new"
+echo half > "$FAT/bootc/entries/ostree-2.new/vmlinuz"
+echo half > "$FAT/bootc/entries/ostree-1/vmlinuz.tmp"
+echo half > "$FAT/tryboot.txt.tmp"
+echo old > "$FAT/config-bootc-working.txt"
+rm -f "$T/flushes"
+sync_ok
+check "no ostree-N.new left" no_new_dirs
+check "no *.tmp left" no_tmp_files
+check "config-bootc-working.txt removed" test ! -e "$FAT/config-bootc-working.txt"
+check "removal flushed" grep -qx "remove leftovers" "$T/flushes"
+check "ostree-1 not rewritten" test "$INODE1" = "$(stat -c %i "$FAT/bootc/entries/ostree-1")"
+check "ostree-1 not swapped" test -z "$(grep 'ostree-1' "$T/flushes")"
+expect_entry 1 A 1
+expect_entry 2 B 1
+
+# (n) hb2: a changed file inside a folder (a damaged kernel copy) is noticed and the
+# folder is rebuilt.
+new_fixture n-damaged
+two_kernels
+set_state 1 2:B:0 1:A:1
+set_status B false
+sync_ok
+echo damaged > "$FAT/bootc/entries/ostree-2/vmlinuz"
+rm -f "$T/flushes"
+sync_ok
+check "ostree-2 rebuilt" grep -qx "swap ostree-2" "$T/flushes"
+check "ostree-1 left alone" test -z "$(grep 'ostree-1' "$T/flushes")"
+expect_entry 2 B 1
+
 # (j) version
 CASE=version
-check "version is v0.0.8-hb1" test "$("$SCRIPT" version)" = v0.0.8-hb1
+check "version is v0.0.8-hb2" test "$("$SCRIPT" version)" = v0.0.8-hb2
 
 echo
 echo "$PASSED passed, $FAILED failed"
