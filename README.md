@@ -3,6 +3,13 @@
 > **Unstable.** This is a test project. Things can break between builds, so don't run it on a
 > card you can't reflash.
 
+> **Don't cut the power during an update or rollback.** If the Pi loses power while it's copying
+> the new kernel to the boot partition, it may not boot again and you'll have to reflash the
+> card. Wait for `bootc upgrade` and the reboot to finish, and for the sync after
+> `bootc rollback`. We're working on a proper fix in the
+> [`fix/bootloader-fsync`](https://github.com/iamyaash/hummingbird-rpi5/tree/fix/bootloader-fsync) branch. It works, but it doesn't
+> cover every case yet. See [known issues](docs/known-issues.md).
+
 Hummingbird is an image-based OS. The whole system is one container image, and you update by
 switching to a newer image instead of installing packages. This repo builds that image into an
 SD card you can flash for the Raspberry Pi 5. The Pi boots it straight from its own firmware,
@@ -32,7 +39,9 @@ Tested on a Raspberry Pi 5 (8 GB) on 2026-11-14, from a fresh flash of the CI im
   [`vcmailbox`](docs/base-vs-rpi5/vcmailbox.md), [tryboot](docs/base-vs-rpi5/tryboot.md), watchdog,
   `bootc upgrade`, `bootc switch`, `bootc rollback` (tested on 2026-11-15, needs a build with
   rpi-bootc-bootloader `v0.0.8-hb1`).
-- **Not tested yet:** HDMI with a monitor, the power button, a power cut during `bootc upgrade`.
+- **Broken:** a power cut during an update or rollback can leave the Pi unable to boot. See the
+  note at the top.
+- **Not tested yet:** HDMI with a monitor, the power button.
 
 ## Build
 

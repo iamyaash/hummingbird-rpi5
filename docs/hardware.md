@@ -40,7 +40,7 @@ Status words used below:
 | `bootc switch` | Works | Also works going from the old AlmaLinux-kernel image to the Fedora-kernel one |
 | Rollback with tryboot (`rpi-bootc-bootloader tryreboot`) | Works | |
 | `bootc rollback` | Works | Tested across kernels `7.3.3` to `7.2.13`. Needs rpi-bootc-bootloader `v0.0.8-hb1`. See [upgrades and rollback](upgrades.md) |
-| Power cut during `bootc upgrade` | Not checked | |
+| Power cut during an update or rollback | Broken | Can leave the Pi unable to boot. See [known issues](known-issues.md) |
 
 ## Networking
 

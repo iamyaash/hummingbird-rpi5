@@ -3,6 +3,10 @@
 `bootc upgrade` and `bootc switch` both work. Automatic updates are off, so a card only changes
 when you run one of them yourself.
 
+> **Don't cut the power during an update or rollback.** It can leave the boot partition half
+> written, and then the Pi won't boot until you reflash the card. See
+> [known issues](known-issues.md).
+
 `bootc upgrade` pulls the `:unstable` tag, which only moves when `main` builds. To run one
 specific build, switch to its tag. A pinned tag never moves, so `upgrade` won't find anything
 newer until you switch back:
@@ -97,9 +101,8 @@ Not tested yet:
 
 - Rolling back twice in a row. Both deployments need `v0.0.8-hb1` and different kernels.
 - `bootc upgrade` with `TRYBOOT=1`.
-- A power cut during a sync. If it hits while the default folder is being replaced, that folder
-  is missing and the boot fails. Hold GPIO6 to boot the fallback, then run
-  `sudo rpi-bootc-bootloader sync`.
+- A power cut during a sync. Tested on 2026-11-16 and it broke the card. See
+  [known issues](known-issues.md).
 - The GPIO6 fallback button.
 
 ## Checking the state
