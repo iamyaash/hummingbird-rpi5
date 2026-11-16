@@ -14,8 +14,20 @@
 #   a sync too. sync runs again if /boot/loader changes while it runs.
 # - RPI_BOOTC_* environment variables, used by tests/bootloader/run.sh. The defaults are
 #   the same paths and commands as upstream.
+# The hb2 changes, for power cuts during a sync:
+# - Upstream never flushes the FAT partition until umount, so a power cut in the middle
+#   of a sync can leave the FAT table half written and neither entry bootable. Now the
+#   FAT is flushed (sync -f) after each new entry folder is written, after each folder
+#   swap and after each config file change, so the card only ever holds finished steps.
+# - Before mounting, a FAT left dirty by an earlier power cut is repaired with fsck.fat -a.
+# - Leftover ostree-N.new folders and *.tmp files from an interrupted sync are removed.
+# - A sync that has nothing to change writes nothing to the FAT partition. Entry folders
+#   are compared with what they should hold before anything is written (entry_plan and
+#   entry_matches replace upstream's process_path), the config files and the trace are
+#   built in RAM, and rpi-bootc-log.txt is only rewritten when the sync changed something
+#   or failed.
 
-VERSION="v0.0.8-hb1"
+VERSION="v0.0.8-hb2"
 WATCHDOG="dtparam=watchdog=on"
 
 # hb1: overrides for the tests. Leave them unset on a Pi.
@@ -27,6 +39,7 @@ STATUS_JSON="${RPI_BOOTC_STATUS_JSON:-}"              # file to read instead of 
 NO_MOUNT="${RPI_BOOTC_NO_MOUNT:-0}"                   # 1 = TMPMNT is a plain folder, don't mount anything
 TRYBOOT_CONF="${RPI_BOOTC_TRYBOOT_CONF:-/etc/rpi-bootc-bootloader/tryboot.conf}"
 LOCK_FILE="${RPI_BOOTC_LOCK:-/run/rpi-bootc-bootloader.lock}"
+FLUSH_LOG="${RPI_BOOTC_FLUSH_LOG:-}"                  # file that gets one line per FAT flush
 
 show_help() {
 	local exit_code="${1:-0}"
@@ -61,9 +74,58 @@ take_lock() {
 }
 
 # hb1: mount, umount and bootc status, with the test overrides.
+# hb2: repair a FAT left dirty by a power cut before mounting it. fsck.fat exits 1 when
+# it fixed something, which is fine. Anything higher is logged, and the mount still runs.
 mount_fat() {
 	[ "$NO_MOUNT" = 1 ] && return 0
+	if command -v fsck.fat >/dev/null 2>&1; then
+		fsck.fat -a "$MNTDEV" >&2
+		[ $? -le 1 ] || echo "Warning: fsck.fat -a $MNTDEV failed, mounting anyway" >&2
+	else
+		echo "Warning: fsck.fat not found, not checking $MNTDEV" >&2
+	fi
 	mount "$MNTDEV" "$TMPMNT"
+}
+
+# hb2: write everything on the FAT partition to the card now. Linux otherwise keeps the
+# changes in RAM until umount and writes them in any order, and a power cut in between
+# can leave the FAT table pointing at clusters that were never written.
+flush_fat() {
+	FLUSHED=1
+	[ -n "$FLUSH_LOG" ] && echo "$1" >> "$FLUSH_LOG"
+	sync -f "$TMPMNT"
+}
+
+# hb2: put the contents of stdin in TARGET on the FAT partition, if they differ. The new
+# contents go to TARGET.tmp first and are flushed, then renamed over TARGET and flushed
+# again, so TARGET is always either the old file or the complete new one. A file that
+# didn't change isn't written at all.
+write_fat_file() {
+	local TARGET="$1"
+	local SRC="$WORKDIR/$(basename "$TARGET")"
+	cat > "$SRC" || return 1
+	if cmp -s "$SRC" "$TARGET"; then
+		rm -f "$SRC"
+		return 0
+	fi
+	cp "$SRC" "$TARGET.tmp" || return 1
+	rm -f "$SRC"
+	flush_fat "write $(basename "$TARGET")" || return 1
+	mv "$TARGET.tmp" "$TARGET" || return 1
+	flush_fat "rename $(basename "$TARGET")"
+}
+
+# hb2: remove what an interrupted sync left on the FAT partition. config-bootc-working.txt
+# was upstream's scratch file, now the scratch files are in RAM.
+remove_leftovers() {
+	local F FOUND=0
+	for F in "$TMPMNT"/bootc/entries/ostree-*.new "$TMPMNT"/*.tmp "$TMPMNT"/bootc/entries/*/*.tmp \
+		"$TMPMNT"/bootc/entries/*/overlays/*.tmp "$TMPMNT/config-bootc-working.txt"; do
+		[ -e "$F" ] || continue
+		rm -rf "$F" || return 1
+		FOUND=1
+	done
+	[ "$FOUND" -eq 0 ] || flush_fat "remove leftovers"
 }
 
 umount_fat() {
@@ -77,34 +139,6 @@ bootc_status() {
 	else
 		bootc status --format json
 	fi
-}
-
-update_file_if_changed() {
-	local TARGET_DIR="$1"
-	local TARGET_NAME="$2"
-	local SOURCE_FULL_PATH="$3"
-
-	local TARGET_FULL_PATH="${TARGET_DIR}/${TARGET_NAME}"
-	local TEMP_FILE="${TARGET_FULL_PATH}.tmp"
-
-	cmp -s "$SOURCE_FULL_PATH" "$TARGET_FULL_PATH"
-	if [ $? -ne 0 ]; then
-		cp "$SOURCE_FULL_PATH" "$TEMP_FILE" || return 1
-		mv "$TEMP_FILE" "$TARGET_FULL_PATH" || return 1
-	fi
-}
-
-sync_dir_with_pattern() {
-	local TARGET_DIR="$1"
-	local SOURCE_PATTERN="$2"
-
-	mkdir -p "$TARGET_DIR"
-
-	for SOURCE_FILE in $SOURCE_PATTERN; do
-		[[ -f "$SOURCE_FILE" ]] || continue
-		local FILENAME=$(basename "$SOURCE_FILE")
-		update_file_if_changed "$TARGET_DIR" "$FILENAME" "$(realpath "$SOURCE_FILE")"
-	done
 }
 
 load_tryboot_config() {
@@ -155,16 +189,19 @@ conf_to_ostree() {
 	return 1
 }
 
-process_path() {
+# hb2: print what entry folder N should contain for the BLS entry LOADERFILE, one line per
+# path: "<path in the folder><TAB><source file>", or "<path><TAB>" for a folder.
+# cmdline.txt is generated into WORKDIR. Replaces upstream's process_path, which copied
+# file by file onto the FAT partition.
+entry_plan() {
 	local LOADERFILE="$1"
-	local LOADERDIR="$2"
 
 	local OPTIONS=$(grep '^options ' "$LOADERFILE" | sed 's/^options //' || echo "")
 	local KERNEL=$(grep '^linux ' "$LOADERFILE" | awk '{print $2}')
 	local INITRD=$(grep '^initrd ' "$LOADERFILE" | awk '{print $2}')
 
-	[[ -n "$KERNEL" ]] || { echo "Error: No kernel found in $LOADERFILE"; return 1; }
-	[[ -n "$INITRD" ]] || { echo "Error: No initrd found in $LOADERFILE"; return 1; }
+	[[ -n "$KERNEL" ]] || { echo "Error: No kernel found in $LOADERFILE" >&2; return 1; }
+	[[ -n "$INITRD" ]] || { echo "Error: No initrd found in $LOADERFILE" >&2; return 1; }
 
 	local OSTREE=$(echo "$OPTIONS" | sed 's/.*ostree=\([^ ]*\).*/\1/')
 	local OSTREEPATH=""
@@ -172,51 +209,81 @@ process_path() {
 		OSTREEPATH=$(readlink -f "$PATH_PREFIX$OSTREE")
 	fi
 
-	update_file_if_changed "$LOADERDIR" "vmlinuz" "$PATH_PREFIX$KERNEL" || return 1
-	update_file_if_changed "$LOADERDIR" "initrd" "$PATH_PREFIX$INITRD" || return 1
+	local CMDLINE="$WORKDIR/cmdline.$(basename "$LOADERFILE").txt"
+	echo "$OPTIONS" > "$CMDLINE" || return 1
 
-	local TMP_CMDLINE="/tmp/new_cmdline.$$.txt"
-	echo "$OPTIONS" > "$TMP_CMDLINE"
-	update_file_if_changed "$LOADERDIR" "cmdline.txt" "$TMP_CMDLINE"
-	rm -f "$TMP_CMDLINE"
+	printf '%s\t%s\n' vmlinuz "$PATH_PREFIX$KERNEL" initrd "$PATH_PREFIX$INITRD" cmdline.txt "$CMDLINE"
 
+	local F
 	local DTB_SRC=$(readlink -f "$OSTREEPATH/usr/share/raspberrypi2-kernel"*/*/boot/ 2>/dev/null)
-
 	if [[ -d "$DTB_SRC" ]]; then
-		sync_dir_with_pattern "$LOADERDIR" "$DTB_SRC/*" || return 1
-		mkdir -p "$LOADERDIR/overlays"
-		sync_dir_with_pattern "$LOADERDIR/overlays" "$DTB_SRC/overlays/*" || return 1
+		for F in "$DTB_SRC"/*; do
+			[[ -f "$F" ]] && printf '%s\t%s\n' "$(basename "$F")" "$(realpath "$F")"
+		done
+		printf '%s\t\n' overlays
+		for F in "$DTB_SRC"/overlays/*; do
+			[[ -f "$F" ]] && printf '%s\t%s\n' "overlays/$(basename "$F")" "$(realpath "$F")"
+		done
 	fi
 
 	local KVER=$(ls "$OSTREEPATH/usr/lib/modules/" | head -n 1)
 	local BOOTDIR="$OSTREEPATH/usr/lib/modules/$KVER"
-
 	if [[ -f "$BOOTDIR/rpi-config.txt" ]]; then
-		update_file_if_changed "$LOADERDIR" "rpi-config.txt" "$BOOTDIR/rpi-config.txt" || return 1
+		printf '%s\t%s\n' rpi-config.txt "$BOOTDIR/rpi-config.txt"
 	fi
+}
+
+# hb2: true if folder DEST has exactly what PLAN lists, with the same contents. Checked
+# before anything is written, so a folder that didn't change costs no writes to the card.
+entry_matches() {
+	local DEST="$1" PLAN="$2" REL SRC
+	[ -d "$DEST" ] || return 1
+	[ "$(cut -f1 "$PLAN" | sort)" == "$(cd "$DEST" && find . -mindepth 1 | sed 's|^\./||' | sort)" ] || return 1
+	while IFS=$'\t' read -r REL SRC; do
+		if [ -z "$SRC" ]; then
+			[ -d "$DEST/$REL" ] || return 1
+		else
+			cmp -s "$SRC" "$DEST/$REL" || return 1
+		fi
+	done < "$PLAN"
+}
+
+# hb2: copy what PLAN lists into the new folder DIR.
+build_entry() {
+	local DIR="$1" PLAN="$2" REL SRC
+	mkdir -p "$DIR" || return 1
+	while IFS=$'\t' read -r REL SRC; do
+		if [ -z "$SRC" ]; then
+			mkdir -p "$DIR/$REL" || return 1
+		else
+			mkdir -p "$(dirname "$DIR/$REL")" && cp "$SRC" "$DIR/$REL" || return 1
+		fi
+	done < "$PLAN"
 }
 
 # hb1: build entry folder N in ostree-N.new/, then replace the old folder with it, so
 # files the deployment no longer has (DTBs, overlays) don't stay behind. FAT can't swap
-# folders atomically, so the old folder is gone for a moment between rm and mv. If the
-# new folder is the same as the old one, the old one is kept and nothing is written.
+# folders atomically, so the old folder is gone for a moment between rm and mv.
+# hb2: if the old folder already has the right contents, nothing is written. Otherwise
+# the FAT is flushed after the new folder is written and again after the swap.
 sync_entry() {
 	local N="$1"
 	local DEST="$TMPMNT/bootc/entries/ostree-$N"
 	local NEW="$DEST.new"
+	local PLAN="$WORKDIR/plan.$N"
+
+	entry_plan "$BOOT_DIR/loader/entries/ostree-$N.conf" > "$PLAN" || return 1
+	entry_matches "$DEST" "$PLAN" && return 0
 
 	rm -rf "$NEW"
-	mkdir -p "$NEW" || return 1
-	if ! process_path "$BOOT_DIR/loader/entries/ostree-$N.conf" "$NEW"; then
+	if ! build_entry "$NEW" "$PLAN"; then
 		rm -rf "$NEW"
 		return 1
 	fi
-	if [ -d "$DEST" ] && diff -rq "$DEST" "$NEW" >/dev/null 2>&1; then
-		rm -rf "$NEW"
-		return 0
-	fi
+	flush_fat "write ostree-$N.new" || return 1
 	rm -rf "$DEST" || return 1
 	mv "$NEW" "$DEST" || return 1
+	flush_fat "swap ostree-$N"
 }
 
 # hb1: print the number (1 or 2) of the BLS entry that ostree boots by default. ostree
@@ -234,10 +301,12 @@ default_entry() {
 	echo "$FOUND"
 }
 
+# hb2: the config files are built in RAM and only written to the FAT partition when they
+# change, through write_fat_file, so each one is flushed and swapped in whole.
 setup_bootloader() {
 	BOOTVER="$1"
 	OTHERVER="$2"
-	cat > "$TMPMNT/config-bootc-working.txt" <<EOF
+	write_fat_file "$TMPMNT/tryboot.txt" <<EOF || return 1
 [all]
 $WATCHDOG
 include config-bootc-common.txt
@@ -250,8 +319,7 @@ include bootc/entries/ostree-$OTHERVER/rpi-config.txt
 kernel=vmlinuz
 initramfs initrd followkernel
 EOF
-	cmp "$TMPMNT/config-bootc-working.txt" "$TMPMNT/tryboot.txt" >/dev/null 2>&1 || mv "$TMPMNT/config-bootc-working.txt" "$TMPMNT/tryboot.txt"
-	cat > "$TMPMNT/config-bootc-working.txt" <<EOF
+	write_fat_file "$TMPMNT/config-bootc-default.txt" <<EOF || return 1
 [all]
 os_prefix=bootc/entries/ostree-$BOOTVER/
 [gpio6=1]
@@ -259,15 +327,13 @@ include bootc/entries/ostree-$BOOTVER/rpi-config.txt
 [all]
 [gpio6=0]
 EOF
-	cmp "$TMPMNT/config-bootc-working.txt" "$TMPMNT/config-bootc-default.txt" >/dev/null 2>&1 || mv "$TMPMNT/config-bootc-working.txt" "$TMPMNT/config-bootc-default.txt"
-	cat > "$TMPMNT/config-bootc-working.txt" <<EOF
+	write_fat_file "$TMPMNT/config-bootc-fallback.txt" <<EOF || return 1
 os_prefix=bootc/entries/ostree-$OTHERVER/
 include bootc/entries/ostree-$OTHERVER/rpi-config.txt
 [all]
 EOF
-	cmp "$TMPMNT/config-bootc-working.txt" "$TMPMNT/config-bootc-fallback.txt" >/dev/null 2>&1 || mv "$TMPMNT/config-bootc-working.txt" "$TMPMNT/config-bootc-fallback.txt"
 	if [ ! -f "$TMPMNT/config.txt" ]; then
-		cat > "$TMPMNT/config.txt" <<EOF
+		write_fat_file "$TMPMNT/config.txt" <<EOF || return 1
 # Do not edit. This is an Automatically generated config file.
 # Put your own customization in your image or config-bootc-common.txt
 
@@ -290,7 +356,7 @@ initramfs initrd followkernel
 EOF
 	fi
 	if [ ! -f "$TMPMNT/config-bootc-common.txt" ]; then
-		cat > "$TMPMNT/config-bootc-common.txt" <<EOF
+		write_fat_file "$TMPMNT/config-bootc-common.txt" <<EOF || return 1
 # Put your own settings here.
 EOF
 	fi
@@ -346,6 +412,11 @@ sync_bootloader() {
 
 	echo "Entries: $ENTRIES"
 
+	# hb2: scratch files (config files, cmdline.txt, the trace) go here, in RAM.
+	WORKDIR=$(mktemp -d /tmp/rpi-bootc-bootloader.XXXXXX) || exit 1
+	MOUNTED=0
+	FLUSHED=0
+
 	cleanup() {
 		EXIT_CODE=$?
 		set +x
@@ -353,19 +424,30 @@ sync_bootloader() {
 			eval "exec ${BASH_XTRACEFD}>&-"
 			unset BASH_XTRACEFD
 		fi
-		umount_fat || true
+		# hb2: the trace is written to the card once, at the end, and only if the sync
+		# changed something or failed. A sync that changed nothing writes nothing.
+		if [ "$MOUNTED" = 1 ] && [ -f "$WORKDIR/trace" ] && [ "$FLUSHED" = 1 -o "$EXIT_CODE" -ne 0 ]; then
+			write_fat_file "$TMPMNT/rpi-bootc-log.txt" < "$WORKDIR/trace" || true
+		fi
+		[ "$MOUNTED" = 1 ] && { umount_fat || true; }
+		rm -rf "$WORKDIR"
 		exit "$EXIT_CODE"
 	}
 
 	trap cleanup EXIT
 
 	mount_fat || exit 1
+	MOUNTED=1
 
-	exec {TRACE_FD}> "$TMPMNT/rpi-bootc-log.txt"
+	exec {TRACE_FD}> "$WORKDIR/trace"
 	export BASH_XTRACEFD="$TRACE_FD"
 	set -x
 
-	mkdir -p "$TMPMNT/bootc/entries"
+	remove_leftovers || exit 1
+	if [ ! -d "$TMPMNT/bootc/entries" ]; then
+		mkdir -p "$TMPMNT/bootc/entries" || exit 1
+		flush_fat "create bootc/entries" || exit 1
+	fi
 	if [ "x$ENTRIES" == "x1" ]; then
 		DIR=$(conf_to_ostree "$BOOT_DIR/loader/entries/ostree-1.conf")
 		test $? -eq 0 || exit 1

@@ -72,7 +72,7 @@ RUN systemctl disable bootloader-update.service \
     && dnf -y install --setopt=install_weak_deps=False raspberrypi2-firmware \
     linux-firmware-raspberrypi raspberrypi-userland brcmfmac-firmware wireless-regdb \
     wpa_supplicant bluez NetworkManager-wifi \
-    cloud-init cloud-utils-growpart xfsprogs jq \
+    cloud-init cloud-utils-growpart xfsprogs jq dosfstools \
     && rpm -q kernel-core \
     && ! rpm -q raspberrypi2-kernel4 \
     && mkdir -p /usr/lib/ostree-boot \
@@ -110,13 +110,14 @@ RUN KVER=$(ls /usr/lib/modules) \
 
 # rpi-bootc-bootloader copies each bootc deployment onto the FAT partition
 # (bootc/entries/ostree-N/) and switches os_prefix in config.txt.
-# It's v0.0.8 kept in bootloader/ and patched for bootc rollback (see the top of the script).
-# It needs flock, cmp and diff, so fail if they're missing.
+# It's v0.0.8 kept in bootloader/ and patched for bootc rollback and power cuts (see the top
+# of the script). It needs flock, cmp, sync -f and fsck.fat, so fail if they're missing.
 COPY bootloader/rpi-bootc-bootloader /usr/bin/rpi-bootc-bootloader
 COPY files/usr/lib/systemd/system/ /usr/lib/systemd/system/
 RUN chmod 0755 /usr/bin/rpi-bootc-bootloader \
-    && grep -q 'VERSION="v0.0.8-hb1"' /usr/bin/rpi-bootc-bootloader \
-    && test -x /usr/bin/flock && test -x /usr/bin/cmp && test -x /usr/bin/diff
+    && grep -q 'VERSION="v0.0.8-hb2"' /usr/bin/rpi-bootc-bootloader \
+    && test -x /usr/bin/flock && test -x /usr/bin/cmp && test -x /usr/bin/diff \
+    && command -v fsck.fat && sync -f /
 
 # cloud-init: grow the partition behind /sysroot and resize /var, because / is
 # read-only composefs on ostree. Same patch as AlmaLinux's bootstrap image.

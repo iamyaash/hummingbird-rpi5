@@ -82,6 +82,30 @@ The patched rpi-bootc-bootloader is in [`bootloader/`](../bootloader/).
 - With `TRYBOOT=1` (in `/etc/rpi-bootc-bootloader/tryboot.conf`), the booted deployment stays the
   default and the other one is on tryboot, like before.
 
+## Power cuts during a sync
+
+`CIDATA` is FAT, which has no journal. Upstream v0.0.8 and `v0.0.8-hb1` only flush it at
+`umount`, so a power cut in the middle of a sync can leave the FAT table half written. On
+2026-11-16 a cut during a forced resync on `v0.0.8-hb1` left both entry folders unreadable
+(`fsck.fat`: "invalid cluster chain", 280 MB of lost clusters). Neither the default nor the
+GPIO6 fallback booted, and the card had to be re-flashed.
+
+`v0.0.8-hb2` changes how a sync writes:
+
+- Each entry folder is compared with what it should hold before anything is written. A folder
+  that's already right isn't touched, so a sync with nothing to do writes nothing.
+- A folder that changed is built in `ostree-N.new/`, flushed (`sync -f`), swapped in, and
+  flushed again. The non-default folder is done first.
+- Config files are built in RAM, written as `<name>.tmp`, flushed, renamed, and flushed again.
+  `config-bootc-default.txt` only changes after both folders are on the card.
+- The trace (`rpi-bootc-log.txt`) is written once at the end, and only if the sync changed
+  something or failed.
+- Before mounting `CIDATA`, `fsck.fat -a` repairs it if an earlier cut left it dirty, and
+  leftover `ostree-N.new` folders and `*.tmp` files are removed.
+
+FAT still can't be made fully safe: a cut during the folder swap itself can leave that folder
+missing. Then hold GPIO6 to boot the fallback and run `sudo rpi-bootc-bootloader sync`.
+
 ## Tested on a Pi 5 (2026-11-15)
 
 - `bootc switch` from a build with kernel `7.3.3` to one with `7.2.13`, and back. Both synced at
@@ -97,9 +121,7 @@ Not tested yet:
 
 - Rolling back twice in a row. Both deployments need `v0.0.8-hb1` and different kernels.
 - `bootc upgrade` with `TRYBOOT=1`.
-- A power cut during a sync. If it hits while the default folder is being replaced, that folder
-  is missing and the boot fails. Hold GPIO6 to boot the fallback, then run
-  `sudo rpi-bootc-bootloader sync`.
+- A power cut during a sync on `v0.0.8-hb2`. See [power cuts during a sync](#power-cuts-during-a-sync).
 - The GPIO6 fallback button.
 
 ## Checking the state
