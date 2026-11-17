@@ -29,7 +29,7 @@ Status words used below:
 | Clock sync (chrony) | Works | Syncs to the Fedora NTP pool |
 | Watchdog (`bcm2835_wdt`) | Works | Module loaded, `/dev/watchdog0` present |
 | Temperature and voltage sensors | Works | hwmon `cpu_thermal` and `rpi_volt` |
-| Real-time clock | No | No `/dev/rtc`. The clock starts at a fixed date on each boot until chrony syncs |
+| Real-time clock | No | No `/dev/rtc` and no battery. The clock is restored from the last saved time on boot, then chrony corrects it. See [chrony](base-vs-rpi5/chrony.md) |
 
 ## Updates
 
