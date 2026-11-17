@@ -1,0 +1,17 @@
+[Unit]
+Description=Restore the clock from the last saved time
+# The Pi has no battery clock. Set the clock from the saved time before chrony asks the
+# network for the real time. Saving at stop needs /var, so run after local filesystems.
+DefaultDependencies=no
+After=local-fs.target
+Before=chronyd.service time-sync.target shutdown.target
+Conflicts=shutdown.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/libexec/rpi-clock restore
+ExecStop=/usr/libexec/rpi-clock save
+
+[Install]
+WantedBy=sysinit.target

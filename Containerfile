@@ -118,6 +118,9 @@ RUN chmod 0755 /usr/bin/rpi-bootc-bootloader \
     && grep -q 'VERSION="v0.0.8-hb1"' /usr/bin/rpi-bootc-bootloader \
     && test -x /usr/bin/flock && test -x /usr/bin/cmp && test -x /usr/bin/diff
 
+# Save and restore the clock, since the Pi has no battery clock. See rpi-clock.service.
+COPY files/usr/libexec/rpi-clock /usr/libexec/rpi-clock
+
 # cloud-init: grow the partition behind /sysroot and resize /var, because / is
 # read-only composefs on ostree. Same patch as AlmaLinux's bootstrap image.
 COPY files/etc/cloud/ /etc/cloud/
