@@ -30,7 +30,6 @@ Status words used below:
 | Watchdog (`bcm2835_wdt`) | Works | Module loaded, `/dev/watchdog0` present |
 | Temperature and voltage sensors | Works | hwmon `cpu_thermal` and `rpi_volt` |
 | Real-time clock | No | No `/dev/rtc`. The clock starts at a fixed date on each boot until chrony syncs |
-| Power button | Not checked | Boot log shows `gpio-keys ... Unable to get irq number for GPIO 0` |
 
 ## Updates
 
@@ -74,7 +73,7 @@ Status words used below:
 
 | Feature | Status | Notes |
 |---|---|---|
-| HDMI output | Loads, not tested | `vc4` loads and creates `HDMI-A-1` and `HDMI-A-2`. No monitor tested. Logs a harmless upstream `vc4-drm ... late IOMMU probe` warning |
+| HDMI output | Works | Works flawlessly |
 | HDMI audio | No | No sound card appears (`/dev/snd` only has `seq` and `timer`) |
 | USB ports | Loads, not tested | 5 USB host controllers present. No USB device tested |
 | PCIe / M.2 HAT | Loads, not tested | The external PCIe slot shows `link down` with nothing attached. Not tested with an NVMe drive |

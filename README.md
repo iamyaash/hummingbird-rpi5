@@ -38,10 +38,9 @@ Tested on a Raspberry Pi 5 (8 GB) on 2026-11-14, from a fresh flash of the CI im
   [cloud-init](docs/base-vs-rpi5/cloud-init.md) first boot, [`vcgencmd`](docs/base-vs-rpi5/vcgencmd.md),
   [`vcmailbox`](docs/base-vs-rpi5/vcmailbox.md), [tryboot](docs/base-vs-rpi5/tryboot.md), watchdog,
   `bootc upgrade`, `bootc switch`, `bootc rollback` (tested on 2026-11-15, needs a build with
-  rpi-bootc-bootloader `v0.0.8-hb1`).
+  rpi-bootc-bootloader `v0.0.8-hb1`), HDMI.
 - **Broken:** a power cut during an update or rollback can leave the Pi unable to boot. See the
   note at the top.
-- **Not tested yet:** HDMI with a monitor, the power button.
 
 ## Build
 
@@ -150,7 +149,6 @@ More detail: [docs/upgrades.md](docs/upgrades.md). How tryboot works:
 
 - Every Pi probably uses the same Bluetooth address (`43:45:C0:00:1F:AC`), so it only matters
   with more than one Pi nearby.
-- HDMI and the power button are untested.
 - Old DTBs and overlays stay on the FAT partition after a kernel change.
 - The unsigned [`vcio.ko`](docs/base-vs-rpi5/vcio-ko.md) and
   [`8250_bcm7271.ko`](docs/base-vs-rpi5/8250_bcm7271.md) taint the kernel.
