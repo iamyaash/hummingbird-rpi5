@@ -119,7 +119,11 @@ RUN chmod 0755 /usr/bin/rpi-bootc-bootloader \
     && test -x /usr/bin/flock && test -x /usr/bin/cmp && test -x /usr/bin/diff
 
 # Save and restore the clock, since the Pi has no battery clock. See rpi-clock.service.
+# The build time is the floor, so a fresh card's clock never starts before the image was built.
 COPY files/usr/libexec/rpi-clock /usr/libexec/rpi-clock
+RUN mkdir -p /usr/lib/rpi-clock \
+    && date +%s > /usr/lib/rpi-clock/build-time \
+    && grep -qE '^[0-9]+$' /usr/lib/rpi-clock/build-time
 
 # cloud-init: grow the partition behind /sysroot and resize /var, because / is
 # read-only composefs on ostree. Same patch as AlmaLinux's bootstrap image.
