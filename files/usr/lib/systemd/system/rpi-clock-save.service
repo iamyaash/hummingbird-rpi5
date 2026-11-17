@@ -1,0 +1,7 @@
+[Unit]
+Description=Save the clock for the next boot
+After=rpi-clock.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/rpi-clock save

@@ -1,0 +1,9 @@
+[Unit]
+Description=Save the clock every hour, so a power cut loses at most an hour
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=1h
+
+[Install]
+WantedBy=timers.target
