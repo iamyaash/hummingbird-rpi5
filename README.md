@@ -37,8 +37,7 @@ Tested on a Raspberry Pi 5 (8 GB) on 2026-11-14, from a fresh flash of the CI im
   [WiFi](docs/base-vs-rpi5/wifi.md), [Bluetooth](docs/base-vs-rpi5/bluetooth.md) (pairing tested),
   [cloud-init](docs/base-vs-rpi5/cloud-init.md) first boot, [`vcgencmd`](docs/base-vs-rpi5/vcgencmd.md),
   [`vcmailbox`](docs/base-vs-rpi5/vcmailbox.md), [tryboot](docs/base-vs-rpi5/tryboot.md), watchdog,
-  `bootc upgrade`, `bootc switch`, `bootc rollback` (tested on 2026-11-15, needs a build with
-  rpi-bootc-bootloader `v0.0.8-hb1`), HDMI.
+  `bootc upgrade`, `bootc switch`, `bootc rollback`, HDMI.
 - **Broken:** a power cut during an update or rollback can leave the Pi unable to boot. See the
   note at the top.
 
@@ -138,7 +137,7 @@ sudo reboot
 ```
 
 A sync copies the boot entries to `CIDATA` by itself after the rollback. Wait for it before you
-reboot. This needs rpi-bootc-bootloader `v0.0.8-hb1` or newer (`rpi-bootc-bootloader version`).
+reboot.
 On older builds, `bootc rollback` can leave the Pi stuck at boot, so run `bootc upgrade` first or
 use the tryboot steps in [docs/upgrades.md](docs/upgrades.md).
 

@@ -27,8 +27,7 @@ journalctl -b -u rpi-bootc-bootloader-sync.service | tail -1   # wait for "Finis
 sudo reboot
 ```
 
-This needs a build with rpi-bootc-bootloader `v0.0.8-hb1` or newer. Check with
-`rpi-bootc-bootloader version`. After `bootc rollback`, a sync runs by itself and copies the boot
+After `bootc rollback`, a sync runs by itself and copies the boot
 entries to `CIDATA`. It took about 45 seconds on a Pi 5 with an SD card. Wait for it before you
 reboot.
 
