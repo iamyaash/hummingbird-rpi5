@@ -10,3 +10,5 @@ enable cloud-init-network.service
 enable cloud-config.service
 enable cloud-final.service
 enable rpi-bootc-bootloader-sync.path
+enable rpi-clock.service
+enable rpi-clock-save.timer
