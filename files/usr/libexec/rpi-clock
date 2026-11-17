@@ -1,0 +1,72 @@
+#!/bin/bash
+# Keep the clock close to right across reboots. The Pi has no battery clock, so on boot the
+# clock is set from the last saved time, and chrony corrects the rest once the network is up.
+#
+#   rpi-clock save      write the current time to $STATE. Skipped if the clock is before the floor.
+#   rpi-clock restore   set the clock to the newer of $STATE and $FLOOR, if that's ahead of now.
+#
+# The floor is the time the image was built, so a fresh card never starts before that.
+# RPI_CLOCK_DRY=1 makes restore print the time it would set instead of setting it. The tests use it.
+
+set -eu
+
+STATE="${RPI_CLOCK_STATE:-/var/lib/rpi-clock/saved-time}"
+FLOOR="${RPI_CLOCK_FLOOR:-/usr/lib/rpi-clock/build-time}"
+
+# read_epoch <file>: print the number in the file. Print nothing if it's missing or not a number.
+read_epoch() {
+	local v
+	[ -r "$1" ] || return 0
+	v="$(cat "$1")"
+	case "$v" in
+		''|*[!0-9]*) return 0 ;;
+	esac
+	echo "$v"
+}
+
+save() {
+	local now floor dir tmp
+	now="$(date +%s)"
+	floor="$(read_epoch "$FLOOR")"
+	if [ -n "$floor" ] && [ "$now" -lt "$floor" ]; then
+		echo "rpi-clock: clock is before the image build time, not saving" >&2
+		return 0
+	fi
+	dir="$(dirname "$STATE")"
+	mkdir -p "$dir"
+	tmp="$(mktemp "$dir/.saved-time.XXXXXX")"
+	echo "$now" > "$tmp"
+	sync "$tmp"
+	mv -f "$tmp" "$STATE"
+}
+
+restore() {
+	local saved floor best now
+	saved="$(read_epoch "$STATE")"
+	floor="$(read_epoch "$FLOOR")"
+	best="$saved"
+	if [ -z "$best" ] || { [ -n "$floor" ] && [ "$floor" -gt "$best" ]; }; then
+		best="$floor"
+	fi
+	if [ -z "$best" ]; then
+		echo "rpi-clock: no saved time, leaving the clock alone"
+		return 0
+	fi
+	now="$(date +%s)"
+	if [ "$best" -le "$now" ]; then
+		echo "rpi-clock: clock is already ahead of the saved time, leaving it alone"
+		return 0
+	fi
+	if [ -n "${RPI_CLOCK_DRY:-}" ]; then
+		echo "$best"
+		return 0
+	fi
+	date -s "@$best" > /dev/null
+	echo "rpi-clock: set clock to $(date -u -d "@$best" +%FT%TZ)"
+}
+
+case "${1:-}" in
+	save) save ;;
+	restore) restore ;;
+	*) echo "usage: rpi-clock save|restore" >&2; exit 2 ;;
+esac
