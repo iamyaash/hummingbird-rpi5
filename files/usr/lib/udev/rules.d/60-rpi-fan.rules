@@ -1,0 +1,5 @@
+# Keep the fan PWM running at 0% duty instead of switching it off (pwm-fan enable mode 2).
+# At fan level 0 pwm-fan switches the PWM off by default (mode 1). The RP1 pin then drops low,
+# and the Pi 5 fan reads a low pin as full speed. With inverted polarity, 0% duty holds the pin
+# high, so the fan stops. See docs/base-vs-rpi5/device-trees.md.
+ACTION=="add", SUBSYSTEM=="hwmon", ATTR{name}=="pwmfan", ATTR{pwm1_enable}="2"
