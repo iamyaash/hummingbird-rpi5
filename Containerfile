@@ -44,6 +44,24 @@ RUN --mount=type=bind,from=base,source=/usr/lib/modules,target=/base-modules \
         | zstd -dc > /out/Image; \
     test "$(dd if=/out/Image bs=1 skip=56 count=4 status=none)" = ARMd
 
+# Add the fan to the base kernel's Pi 5 DTBs. Upstream has no pwm-fan node or fan cooling maps,
+# so the fan runs at full speed. See dts/rpi5-fan.dtso. dtc stays in this stage.
+# fan-dtb.sh fails if a DTB is missing, the overlay doesn't apply, or the result is wrong.
+FROM ${BUILDER_IMAGE} AS dtb-build
+COPY dts/rpi5-fan.dtso /src/
+COPY scripts/fan-dtb.sh /src/
+RUN --mount=type=bind,from=base,source=/usr/lib/modules,target=/base-modules \
+    set -eux; \
+    KVER="$(ls /base-modules)"; \
+    test "$(echo "$KVER" | wc -w)" = 1; \
+    dnf -y install --setopt=install_weak_deps=False dtc; \
+    dtc -@ -I dts -O dtb -o /src/rpi5-fan.dtbo /src/rpi5-fan.dtso; \
+    mkdir -p /out; \
+    for b in bcm2712-rpi-5-b bcm2712-d-rpi-5-b; do \
+        /src/fan-dtb.sh apply "/base-modules/$KVER/dtb/broadcom/$b.dtb" /src/rpi5-fan.dtbo "/out/$b.dtb"; \
+    done; \
+    echo "$KVER" > /out/kver
+
 FROM ${BASE_IMAGE}
 
 # dnf protects GRUB and shim through /etc/dnf/protected.d. Drop that so dnf can remove them.
@@ -89,10 +107,13 @@ RUN systemctl disable bootloader-update.service \
 # - The Pi 5 DTBs go under /usr/share/raspberrypi2-kernel*/<kver>/boot/, which is
 #   where rpi-bootc-bootloader copies from. The firmware looks for the downstream file names,
 #   so the upstream bcm2712-d-rpi-5-b.dtb gets installed as bcm2712d0-rpi-5-b.dtb.
+#   They're the copies with the fan added, from the dtb-build stage.
 COPY --from=kernel-build /out/ /tmp/kernel-build/
+COPY --from=dtb-build /out/ /tmp/dtb-build/
 COPY files/usr/lib/modules-load.d/vcio.conf /usr/lib/modules-load.d/
 RUN KVER=$(ls /usr/lib/modules) \
     && test "$KVER" = "$(cat /tmp/kernel-build/kver)" \
+    && test "$KVER" = "$(cat /tmp/dtb-build/kver)" \
     && install -m 0755 /tmp/kernel-build/Image /usr/lib/modules/$KVER/vmlinuz \
     && rm -f /usr/lib/modules/$KVER/.vmlinuz.hmac \
     && install -D -m 0644 /tmp/kernel-build/vcio.ko /usr/lib/modules/$KVER/extra/vcio.ko \
@@ -101,12 +122,12 @@ RUN KVER=$(ls /usr/lib/modules) \
     && modinfo -k $KVER vcio > /dev/null \
     && grep -q 'brcm,bcm7271-uart.* 8250_bcm7271$' /usr/lib/modules/$KVER/modules.alias \
     && D=/usr/share/raspberrypi2-kernel-fedora/$KVER/boot \
-    && install -D -m 0644 /usr/lib/modules/$KVER/dtb/broadcom/bcm2712-rpi-5-b.dtb $D/bcm2712-rpi-5-b.dtb \
-    && install -m 0644 /usr/lib/modules/$KVER/dtb/broadcom/bcm2712-d-rpi-5-b.dtb $D/bcm2712d0-rpi-5-b.dtb \
+    && install -D -m 0644 /tmp/dtb-build/bcm2712-rpi-5-b.dtb $D/bcm2712-rpi-5-b.dtb \
+    && install -m 0644 /tmp/dtb-build/bcm2712-d-rpi-5-b.dtb $D/bcm2712d0-rpi-5-b.dtb \
     && test "$(ls -d /usr/share/raspberrypi2-kernel*/*/boot | wc -l)" = 1 \
     && echo '# Per-deployment firmware settings (board-wide ones go in config-bootc-common.txt).' \
        > /usr/lib/modules/$KVER/rpi-config.txt \
-    && rm -rf /tmp/kernel-build /var/cache/ldconfig
+    && rm -rf /tmp/kernel-build /tmp/dtb-build /var/cache/ldconfig
 
 # rpi-bootc-bootloader copies each bootc deployment onto the FAT partition
 # (bootc/entries/ostree-N/) and switches os_prefix in config.txt.
