@@ -12,8 +12,10 @@
   [`fix/bootloader-fsync`](https://github.com/iamyaash/hummingbird-rpi5/tree/fix/bootloader-fsync) branch. It works, but
   it isn't reliable in every case yet, so it's not merged.
 - **The fan may run at full speed.** The upstream device tree has no `pwm-fan` node, so nothing
-  drives the fan pin. Images built from this change patch the DTBs to add the fan and its trips
-  (see [device trees](base-vs-rpi5/device-trees.md#the-fan-patch)), but that isn't checked on a Pi
-  yet. Older images always run the fan at full speed.
+  drives the fan pin. Images built from this change patch the DTBs to add the fan and its trips,
+  and a udev rule keeps the PWM on at fan level 0 (see
+  [device trees](base-vs-rpi5/device-trees.md#fan-level-0-and-the-udev-rule)). Without the rule,
+  the fan runs at full speed whenever the CPU is cool. Older images always run the fan at full
+  speed. The udev rule isn't checked on a fresh boot yet.
 - **The kernel is tainted.** The unsigned `vcio.ko` and `8250_bcm7271.ko` taint it (flags `O`
   and `E`).
