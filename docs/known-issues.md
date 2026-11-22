@@ -16,6 +16,6 @@
   and a udev rule keeps the PWM on at fan level 0 (see
   [device trees](base-vs-rpi5/device-trees.md#fan-level-0-and-the-udev-rule)). Without the rule,
   the fan runs at full speed whenever the CPU is cool. Older images always run the fan at full
-  speed. The udev rule isn't checked on a fresh boot yet.
+  speed. Early in boot (before udev) and at shutdown, the fan runs at full speed for a moment.
 - **The kernel is tainted.** The unsigned `vcio.ko` and `8250_bcm7271.ko` taint it (flags `O`
   and `E`).
