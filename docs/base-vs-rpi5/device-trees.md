@@ -28,9 +28,49 @@ The [`Containerfile`](../../Containerfile) copies the two Pi 5 DTBs into
 | `bcm2712-rpi-5-b.dtb` | `bcm2712-rpi-5-b.dtb` |
 | `bcm2712-d-rpi-5-b.dtb` | `bcm2712d0-rpi-5-b.dtb` |
 
+Both are patched on the way in to add the fan.
+
+## The fan patch
+
+The upstream DTBs enable the RP1 PWM (`rp1_pwm1`) and mux the fan pin (GPIO45) to it, but they
+have no `pwm-fan` node, and `cpu_thermal` only has the 110 C critical trip. Nothing claims the PWM
+channel, so the pin stays low and the fan (fan header or Active Cooler) runs at full speed.
+
+[`dts/rpi5-fan.dtso`](../../dts/rpi5-fan.dtso) adds what's missing, with the values from the
+Raspberry Pi downstream `bcm2712-rpi-5-b.dts`:
+
+| What | Value |
+|---|---|
+| `pwm-fan` node | `/pwm-fan`, label `fan` |
+| `pwms` | `rp1_pwm1` channel 3, period 41566 ns (about 24 kHz), inverted polarity |
+| `cooling-levels` | `0 75 125 175 250` (off, then about 30, 50, 70 and 100 percent) |
+| Active trips in `cpu_thermal` | 50, 60, 67.5 and 75 C, each with 5 C of hysteresis |
+| Cooling maps | Each trip sets the fan to the next level (1 to 4) |
+
+Not taken from downstream: the tach read-out (`rpm-regmap`, which upstream `pwm-fan` doesn't
+have), `cooling-min-state`/`cooling-max-state` (upstream works them out from `cooling-levels`) and
+the map on the critical trip (the fan is already at full speed from 75 C).
+
+How it's applied: a `dtb-build` stage in the [`Containerfile`](../../Containerfile) compiles the
+overlay and runs [`scripts/fan-dtb.sh`](../../scripts/fan-dtb.sh) `apply` on each DTB. That runs
+`fdtoverlay` and then checks the result. `dtc` is only in that stage, not in the image. The
+patched DTBs are installed in the same place as before, so rpi-bootc-bootloader, tryboot and
+rollback work as before, and each deployment carries its own patched DTB.
+
+The overlay refers to labels in the base DTB (`rp1_pwm1`, `thermal_trips`, `cooling_maps`), so it
+needs the base's `__symbols__`. Fedora builds its DTBs with `-@`, so they're there (checked on
+`7.3.3-200.fc44`). If a later kernel drops them, `fdtoverlay` fails and so does the build.
+
+The build also fails if a DTB is missing, if the check finds a wrong value, or if the base DTB
+already has a `pwm-fan` node or cooling maps. That last one means upstream has the fan now: drop
+the overlay and the `dtb-build` stage, and keep `scripts/fan-dtb.sh check` to test the DTBs.
+
+[`tests/fan-dtb/run.sh`](../../tests/fan-dtb/run.sh) runs the patch against unpatched DTBs from
+the base image. It needs `dtc`.
+
 ## Things to know
 
-- They're the upstream DTBs, not the Raspberry Pi downstream ones. That's why
+- They're the upstream DTBs (plus the fan patch), not the Raspberry Pi downstream ones. That's why
   [`vcio.ko`](vcio-ko.md) had to be changed: upstream has no `raspberrypi,vcio` node.
 - No overlays are shipped. The downstream overlays don't match the upstream DTBs.
 - Old DTBs stay on the FAT partition after a kernel change. See [known issues](../known-issues.md).

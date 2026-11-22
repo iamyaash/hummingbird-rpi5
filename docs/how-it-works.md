@@ -30,8 +30,10 @@ Fedora's kernel boots fine on the Pi once a few things are changed.
 - **Device trees.** The Pi 5 DTBs are staged under
   `/usr/share/raspberrypi2-kernel-fedora/<kver>/boot/`, which is where rpi-bootc-bootloader copies
   from. The upstream `bcm2712-d-rpi-5-b.dtb` is installed as `bcm2712d0-rpi-5-b.dtb`, the name the
-  firmware looks for. No device tree overlays ship, because the downstream overlays don't match
-  the upstream DTBs.
+  firmware looks for. Both get a fan node and fan trips added at build time
+  ([`dts/rpi5-fan.dtso`](../dts/rpi5-fan.dtso)), since upstream has none and the fan would run at
+  full speed. No device tree overlays ship, because the downstream overlays don't match the
+  upstream DTBs.
 - **Initramfs.** Fedora builds the SD card drivers and filesystems as modules, so the initramfs
   adds `mmc_block sdhci sdhci-pltfm sdhci-brcmstb xfs erofs overlay`.
 - **Updates.** rpi-bootc-bootloader copies each bootc deployment onto the FAT partition
@@ -49,7 +51,7 @@ Fedora's kernel boots fine on the Pi once a few things are changed.
 |---|---|
 | Userspace (systemd, bootc, ostree, dracut, NetworkManager, chrony) | `quay.io/hummingbird-community/os-minimal`, pinned by date and digest |
 | Kernel | Fedora 44 kernel in the base image (`7.3.3-200.fc44` at the current pin) |
-| Device trees | Upstream Fedora Pi 5 DTBs from the same kernel |
+| Device trees | Upstream Fedora Pi 5 DTBs from the same kernel, with the fan added |
 | `/dev/vcio` | `vcio.ko`, built from [`kmod/vcio/`](../kmod/vcio/) |
 | VideoCore firmware | AlmaLinux `raspberrypi2-firmware` |
 | Pi WiFi and Bluetooth firmware | AlmaLinux `linux-firmware-raspberrypi` |
