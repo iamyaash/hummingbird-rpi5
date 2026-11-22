@@ -11,5 +11,9 @@
   off while an update or rollback is running. A fix is in progress in the
   [`fix/bootloader-fsync`](https://github.com/iamyaash/hummingbird-rpi5/tree/fix/bootloader-fsync) branch. It works, but
   it isn't reliable in every case yet, so it's not merged.
+- **The fan may run at full speed.** The upstream device tree has no `pwm-fan` node, so nothing
+  drives the fan pin. Images built from this change patch the DTBs to add the fan and its trips
+  (see [device trees](base-vs-rpi5/device-trees.md#the-fan-patch)), but that isn't checked on a Pi
+  yet. Older images always run the fan at full speed.
 - **The kernel is tainted.** The unsigned `vcio.ko` and `8250_bcm7271.ko` taint it (flags `O`
   and `E`).
