@@ -80,7 +80,7 @@ Status words used below:
 | GPIO | Loads, not tested | `/dev/gpiochip0` through `5` are present. Not tested |
 | I2C, SPI | No | No `/dev/i2c-*` or `/dev/spidev*`. Would need device tree changes, and no overlays ship |
 | Status LEDs (ACT, PWR) | Not checked | Not in `/sys/class/leds`, only `mmc0::` and `mmc1::` show up |
-| Fan / Active Cooler | Not checked | No fan cooling device found. Not checked with a fan attached |
+| Fan / Active Cooler | Not checked | Ran at full speed, since the upstream DTB has no `pwm-fan` node. Fixed by a DTB patch that adds the fan and its trips, see [device trees](base-vs-rpi5/device-trees.md#the-fan-patch). Not yet checked on the Pi |
 | Camera (CSI), display (DSI) | Not checked | |
 | UART debug console (`ttyAMA10`) | Not checked | Set up in `config-bootc-common.txt` and the kernel arguments. Not checked with a serial adapter |
 | Booting from USB or NVMe | Not checked | Only microSD is tested |
