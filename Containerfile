@@ -183,6 +183,10 @@ COPY files/usr/lib/bootc/kargs.d/00-base.toml /usr/lib/bootc/kargs.d/
 COPY files/usr/lib/udev/rules.d/60-rpi-vcio.rules /usr/lib/udev/rules.d/
 RUN test -x /usr/bin/vcgencmd && test -x /usr/bin/vcmailbox
 
+# Keep the fan PWM on at 0% duty, or the fan runs at full speed at fan level 0.
+# See dts/rpi5-fan.dtso and docs/base-vs-rpi5/device-trees.md.
+COPY files/usr/lib/udev/rules.d/60-rpi-fan.rules /usr/lib/udev/rules.d/
+
 # Rebuild the initramfs with --no-hostonly, since the build machine isn't a Pi. Include the
 # filesystem and SD card modules from 30-rpi.conf. Fail the build if any are missing.
 COPY files/usr/lib/dracut/dracut.conf.d/30-rpi.conf /usr/lib/dracut/dracut.conf.d/
