@@ -1,0 +1,84 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Fan control for the Pi 5 fan header (and the Active Cooler).
+ *
+ * The upstream Pi 5 DTBs that the Fedora kernel ships enable rp1_pwm1 and mux GPIO45 to it, but
+ * have no pwm-fan node and only the 110 C critical trip. Nothing claims the PWM channel, so the
+ * pin stays low and the fan runs at full speed. This adds the fan and its trips and maps.
+ *
+ * Values follow the Raspberry Pi downstream bcm2712-rpi-5-b.dts (rpi-6.12.y and rpi-6.18.y).
+ * Left out on purpose:
+ * - rpm-regmap and rpm-offset, the downstream tach read-out. Upstream pwm-fan doesn't have them.
+ * - cooling-min-state and cooling-max-state. Upstream pwm-fan works them out from cooling-levels.
+ * - The map on cpu_crit. The fan is already at full speed from 75 C, and at 110 C the
+ *   critical trip shuts the board down anyway.
+ *
+ * The Containerfile applies this to both Pi 5 DTBs with fdtoverlay. It refers to labels in the
+ * base DTB (rp1_pwm1, thermal_trips, cooling_maps), so the base needs __symbols__ (built with -@).
+ * Fedora's DTBs have them. If they ever don't, fdtoverlay fails and so does the build.
+ */
+
+/dts-v1/;
+/plugin/;
+
+&{/} {
+	fan: pwm-fan {
+		compatible = "pwm-fan";
+		/*
+		 * RP1 pwm1 channel 3 (GPIO45), 41566 ns period (about 24 kHz). The last cell is
+		 * PWM_POLARITY_INVERTED (1), written out so the file builds without the C preprocessor.
+		 */
+		pwms = <&rp1_pwm1 3 41566 1>;
+		/* Fan off, then about 30, 50, 70 and 100 percent. */
+		cooling-levels = <0 75 125 175 250>;
+		#cooling-cells = <2>;
+	};
+};
+
+&thermal_trips {
+	cpu_tepid: cpu-tepid {
+		temperature = <50000>;
+		hysteresis = <5000>;
+		type = "active";
+	};
+
+	cpu_warm: cpu-warm {
+		temperature = <60000>;
+		hysteresis = <5000>;
+		type = "active";
+	};
+
+	cpu_hot: cpu-hot {
+		temperature = <67500>;
+		hysteresis = <5000>;
+		type = "active";
+	};
+
+	cpu_vhot: cpu-vhot {
+		temperature = <75000>;
+		hysteresis = <5000>;
+		type = "active";
+	};
+};
+
+&cooling_maps {
+	map-tepid {
+		trip = <&cpu_tepid>;
+		cooling-device = <&fan 1 1>;
+	};
+
+	map-warm {
+		trip = <&cpu_warm>;
+		cooling-device = <&fan 2 2>;
+	};
+
+	map-hot {
+		trip = <&cpu_hot>;
+		cooling-device = <&fan 3 3>;
+	};
+
+	map-vhot {
+		trip = <&cpu_vhot>;
+		cooling-device = <&fan 4 4>;
+	};
+};
