@@ -68,6 +68,24 @@ the overlay and the `dtb-build` stage, and keep `scripts/fan-dtb.sh check` to te
 [`tests/fan-dtb/run.sh`](../../tests/fan-dtb/run.sh) runs the patch against unpatched DTBs from
 the base image. It needs `dtc`.
 
+### Fan level 0 and the udev rule
+
+At fan level 0 (`pwm1` 0), `pwm-fan` switches the PWM off by default (`pwm1_enable` 1). A
+switched-off RP1 PWM drops the pin low, and the fan reads a low pin as full speed. So without a
+fix, the fan runs flat out whenever the CPU is below the first trip.
+
+[`60-rpi-fan.rules`](../../files/usr/lib/udev/rules.d/60-rpi-fan.rules) sets `pwm1_enable` to 2
+when the `pwmfan` hwmon device shows up. In that mode `pwm-fan` keeps the PWM on at 0% duty, which
+with inverted polarity holds the pin high, so the fan stops. There's no device tree property for
+this mode, so it has to be set from userspace.
+
+To check it on the Pi:
+
+```
+cat /sys/class/hwmon/hwmon*/pwm1_enable       # 2
+sudo cat /sys/kernel/debug/pwm | grep -A1 pwm-3  # enabled, even at 0/41566 ns
+```
+
 ## Things to know
 
 - They're the upstream DTBs (plus the fan patch), not the Raspberry Pi downstream ones. That's why
