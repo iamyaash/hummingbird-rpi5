@@ -1,6 +1,6 @@
 # Pinned base image. Bump the date tag and digest together.
 # The base's Fedora kernel is the one that boots, so a bump also means rebuilding vcio.ko.
-ARG BASE_IMAGE=quay.io/hummingbird-community/os-minimal:20261113@sha256:a98c8cf505b1fdde497fa78af26c2d7439f97071cc79cb4e35fc104d6bda4a79
+ARG BASE_IMAGE=quay.io/hummingbird-community/os-minimal:20261123@sha256:302484220638df77cd437068f264e3a88a377f640fcea737bcaaf5cb29553b49
 
 # Only used to build vcio.ko and unpack the kernel. Nothing from it ships.
 ARG BUILDER_IMAGE=registry.fedoraproject.org/fedora:44
